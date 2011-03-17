@@ -24,45 +24,127 @@ namespace RAIDGenerator {
 		public RaidController(string inputRaidMode, int inputDisksInArray, int DiskSizeMB) {
 			m_RaidMode = new RaidMode(inputRaidMode);
 			m_DisksInArray = inputDisksInArray;
-			m_DiskSize = DiskSizeMB * 8388608;
+			m_DiskSize = DiskSizeMB * 1024 * 1024 * 8;
 		}
 
-		public void GenerateArray(string inputSourceDiskFilename) {
+		public void GenerateArray(string SourceDiskFilename) {
 			bool[] SourceDisk;
 			bool[][] DiskArray;
-			SourceDisk = FileToBoolArray(inputSourceDiskFilename);
+			SourceDisk = FileToBoolArray(SourceDiskFilename);
 			DiskArray = SplitIntoDisks(SourceDisk);
 			WriteDisks(DiskArray);
 		}
 
-		public void RecombineArray() {
+		public void RecombineArray(string OutputFileName, int startPoint, int Length) {
+			bool UnrecoverableError = false;
+			bool[] trimmedOutputFileBoolArr = new bool[Length * 8];
+			bool[] outputFileBoolArr = new bool[m_DisksInArray * m_DiskSize];
+			bool[][] DiskArray = new bool[m_DisksInArray][];
+			int outputFilePos = 0;
+			int i = 0;
+			FileInfo[] fileInfoList = new DirectoryInfo(@"C:\Users\Administrator\Desktop\RAID Generator\Workspace\Disks\").GetFiles("Disk*.dsk");
+			foreach(FileInfo currentFile in fileInfoList) {
+				DiskArray[i] = FileToBoolArray(currentFile.FullName);
+				i++;
+			}
 			switch (m_RaidMode.Title) {
 				case "RAID0":
-					#region RAID0
+					#region RAID0 - Block-level striping without parity or mirroring.
+					for (i = 0; i < m_DiskSize; i++) {
+						for (int j = 0; j < m_DisksInArray; j++) {
+							outputFileBoolArr[outputFilePos] = DiskArray[j][i];
+							outputFilePos++;
+						}
+					}
+					break;
+					#endregion
+				case "RAID1":
+					#region RAID1 - Mirroring without parity or striping.
+					for (i = 0; i < m_DiskSize; i++) {
+						for (int j = 0; j < m_DisksInArray; j++) {
+							if (DiskArray[0][i] != DiskArray[j][i]) {
+								UnrecoverableError = true;
+								Console.WriteLine("Unrecoverable error at Block[{0}]!", i);
+								break;
+							}
+						}
+						if (!UnrecoverableError) {
+							outputFileBoolArr[outputFilePos] = DiskArray[0][i];
+							outputFilePos++;
+						} else {
+							break;
+						}
+					}
 					break;
 					#endregion
 			}
+			if (!UnrecoverableError) {
+				Array.Copy(outputFileBoolArr, trimmedOutputFileBoolArr, trimmedOutputFileBoolArr.Length);
+				BoolArrayToFile(trimmedOutputFileBoolArr, OutputFileName);
+			}
+
 		}
 
 		private bool[][] SplitIntoDisks(bool[] inputDisk) {
 			bool[][] returnBoolArray = null;
+			int UsedDisks = 0;
+			int CurrentDisk = 0;
+			int CurrentBlock = 0;
 			switch (m_RaidMode.Title) {
 				case "RAID0":
-					#region RAID0
-					int UsedDisks = m_DisksInArray;
+					#region RAID0 - Block-level striping without parity or mirroring.
+					UsedDisks = m_DisksInArray;
 					returnBoolArray = new bool[UsedDisks][];
 					for (int i = 0; i < returnBoolArray.Length; i++) {
 						returnBoolArray[i] = new bool[m_DiskSize];
 					}
-					int CurrentDisk = 0;
-					int CurrentBlock = 0;
 					for (int i = 0; i < inputDisk.Length; i++) {
 						returnBoolArray[CurrentDisk][CurrentBlock] = inputDisk[i];
+						//Console.Write("Disk[{0}].Block[{1}] = Source[{2}]", CurrentDisk, CurrentBlock, i); Console.ReadLine();
 						CurrentDisk++;
 						if (CurrentDisk == UsedDisks) {
 							CurrentDisk = 0;
 							CurrentBlock++;
 						}
+					}
+					break;
+					#endregion
+				case "RAID1":
+					#region RAID1 - Mirroring without parity or striping.
+					UsedDisks = m_DisksInArray;
+					returnBoolArray = new bool[UsedDisks][];
+					for (int i = 0; i < returnBoolArray.Length; i++) {
+						returnBoolArray[i] = new bool[m_DiskSize];
+					}
+					for (int i = 0; i < inputDisk.Length; i++) {
+						for (CurrentDisk = 0; CurrentDisk < UsedDisks; CurrentDisk++) {
+							returnBoolArray[CurrentDisk][CurrentBlock] = inputDisk[i];
+							//Console.Write("Disk[{0}].Block[{1}] = Source[{2}]", CurrentDisk, CurrentBlock, i); Console.ReadLine();
+						}
+						CurrentBlock++;
+					}
+					break;
+					#endregion
+				case "RAID4":
+					#region RAID4 - Block-level striping with dedicated parity.
+					UsedDisks = m_DisksInArray;
+					bool tempXOR = false;
+					returnBoolArray = new bool[UsedDisks][];
+					for (int i = 0; i < returnBoolArray.Length; i++) {
+						returnBoolArray[i] = new bool[m_DiskSize];
+					}
+					for (int i = 0; i < inputDisk.Length; i += UsedDisks - 1) {
+						for (CurrentDisk = 0; CurrentDisk < UsedDisks - 1; CurrentDisk++) {
+							returnBoolArray[CurrentDisk][CurrentBlock] = inputDisk[i + CurrentDisk];
+							//Console.WriteLine("Disk[{0}].Block[{1}] = Source[{2}] = {3}", CurrentDisk, CurrentBlock, i + CurrentDisk, inputDisk[i + CurrentDisk]);
+							if (CurrentDisk == 0) {
+								tempXOR = inputDisk[i];
+							} else {
+								tempXOR ^= inputDisk[i + CurrentDisk];
+							}
+						}
+						returnBoolArray[CurrentDisk][CurrentBlock] = tempXOR;
+						//Console.Write("Disk[{0}].Block[{1}] = XOR = {2}", CurrentDisk, CurrentBlock, tempXOR); Console.ReadLine();
 					}
 					break;
 					#endregion
@@ -72,7 +154,7 @@ namespace RAIDGenerator {
 
 		private void WriteDisks(bool[][] inputDiskArray) {
 			for (int i = 0; i < inputDiskArray.Length; i++) {
-				BoolArrayToFile(inputDiskArray[i], @"C:\Users\Administrator\Desktop\RAID Generator\Workspace\Disks\Disk" + i + ".dsk");
+				BoolArrayToFile(inputDiskArray[i], String.Format(@"C:\Users\Administrator\Desktop\RAID Generator\Workspace\Disks\Disk{0:d2}.dsk", i));
 			}
 		}
 

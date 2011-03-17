@@ -22,16 +22,6 @@ namespace RAIDGenerator {
 					Description = "RAID1 - Mirroring without parity or striping.";
 					MinimumDisks = 2;
 					break;
-				case "2":
-					Title = "RAID2";
-					Description = "RAID2 - Bit-level striping with dedicated Hamming-code parity.";
-					MinimumDisks = 3;
-					break;
-				case "3":
-					Title = "RAID3";
-					Description = "RAID3 - Byte-level striping with dedicated parity.";
-					MinimumDisks = 3;
-					break;
 				case "4":
 					Title = "RAID4";
 					Description = "RAID4 - Block-level striping with dedicated parity.";

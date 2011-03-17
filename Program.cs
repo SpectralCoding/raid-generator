@@ -14,7 +14,7 @@ namespace RAIDGenerator {
 			Console.WriteLine("Drive Bay: .\\Workspace\\Disks\\");
 
 			if (AutoRun) {
-				RaidController = new RaidController("0", 3, 1);
+				RaidController = new RaidController("4", 4, 1);
 			} else {
 				Console.Write("Please enter a RAID Mode: ");
 				string RaidMode = Console.ReadLine();
@@ -27,7 +27,8 @@ namespace RAIDGenerator {
 
 			Console.WriteLine("\n" + RaidController.DisksInArray.ToString() + " Disk Raid Mode Set: " + RaidController.RaidMode.Description + "\n");
 
-			RaidController.GenerateArray(@"C:\Users\Administrator\Desktop\RAID Generator\Workspace\utorrent.exe");
+			RaidController.GenerateArray(@"C:\Users\Administrator\Desktop\RAID Generator\Workspace\drive.img");
+			RaidController.RecombineArray(@"C:\Users\Administrator\Desktop\RAID Generator\Workspace\drive_regen.img", 0, 1048576);
 
 			Console.Write("\nPress ENTER to exit... ");
 			Console.ReadLine();
